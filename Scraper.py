@@ -19,10 +19,13 @@ class Scraper(ABC):
         self._response_checker = f
 
     def add_cookies(self, cookie):
-        self._session.cookies.set(cookie['name'], cookie['value'])
+        self._session.cookies.set(cookie["name"], cookie["value"])
 
     def add_headers(self, headers):
         self._session.headers.update(headers)
+
+    def set_response(self, response):
+        self._response = response
 
     def request(self, url, data=None, headers=None, method=None):
         if method is None:
@@ -41,7 +44,11 @@ class Scraper(ABC):
 
     @property
     def body(self):
-        return self._response.content.decode("utf-8") if self._response is not None else None
+        return (
+            self._response
+            if isinstance(self._response, str)
+            else self._response.content.decode("utf-8")
+        )
 
     @property
     def status_code(self):
