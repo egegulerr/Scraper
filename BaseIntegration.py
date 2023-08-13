@@ -1,12 +1,16 @@
-from Scraper import Scraper
 from abc import ABC, abstractmethod
+from WebClient.SeleniumScraper import SeleniumScraper
+from WebClient.RequestsScraper import RequestsScraper
+
+
+def create_scraper_instance(use_selenium=False, web_driver_options=None):
+    return SeleniumScraper(web_driver_options) if use_selenium else RequestsScraper()
 
 
 class BaseIntegration(ABC):
-    def __init__(self):
-        self.scraper = Scraper()
+    def __init__(self, use_selenium=False, webdriver_options=None):
+        self.scraper = create_scraper_instance(use_selenium, webdriver_options)
 
-    @abstractmethod
     def response_checker(self, response):
         raise NotImplementedError("Response checker not implemented!")
 
