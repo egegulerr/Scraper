@@ -32,6 +32,10 @@ class SeleniumScraper(ScraperFactory):
     def add_response_checker(self, function):
         self._response_checker = function
 
+    @property
+    def content(self):
+        return self.driver.page_source
+
     @staticmethod
     def solve_recaptcha():
         input("Please press enter after you solve recaptcha.")
@@ -54,8 +58,8 @@ class SeleniumScraper(ScraperFactory):
     def find_element(self, method, selector):
         return self.driver.find_element(method, selector)
 
-    def click_when_clickable(self, method, selector):
-        WebDriverWait(self.driver, 5).until(
+    def click_when_clickable(self, method, selector, time_out=5):
+        WebDriverWait(self.driver, time_out).until(
             EC.element_to_be_clickable(
                 (
                     method,
