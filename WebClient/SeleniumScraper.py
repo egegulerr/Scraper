@@ -9,13 +9,15 @@ from .ScraperFactory import ScraperFactory
 
 class SeleniumScraper(ScraperFactory):
     def __init__(self, web_driver_options=None):
-        options = webdriver.ChromeOptions()
+        options = uc.ChromeOptions()
         options.add_argument("--ignore-ssl-errors=yes")
         options.add_argument("--ignore-certificate-errors")
         if web_driver_options:
             for arg in web_driver_options:
                 options.add_argument(arg)
-        self.driver = uc.Chrome(headless=False, use_subprocess=False, options=options)
+        self.driver = uc.Chrome(
+            headless=False, use_subprocess=False, options=options, version_main=117
+        )
         self.driver.maximize_window()
         self._response_checker = None
 
@@ -41,11 +43,14 @@ class SeleniumScraper(ScraperFactory):
         input("Please press enter after you solve recaptcha.")
         sleep(4)
 
-    def find_and_click_element(self, method, selector):
-        element = self.driver.find_element(method, selector)
+    def click_element(self, element):
         element.click()
         sleep(3)
         self._response_checker(html.fromstring(self.driver.page_source))
+
+    def find_and_click_element(self, method, selector):
+        element = self.driver.find_element(method, selector)
+        self.click_element(element)
 
     def find_and_send_key(self, method, selector, key):
         element = self.driver.find_element(method, selector)
