@@ -21,18 +21,33 @@ class SeleniumScraper(ScraperFactory):
         self.driver.maximize_window()
         self._response_checker = None
 
-    def get(self, url):
-        if self._response_checker and self.driver.current_url != "chrome://welcome/":
-            self._response_checker(html.fromstring(self.driver.page_source))
-
-        self.driver.get(url)
-        sleep(4)
-
     def close(self):
         self.driver.close()
 
     def add_response_checker(self, function):
         self._response_checker = function
+
+    @staticmethod
+    def response_checker_decorator(func):
+        def wrapper(self, *args, **kwargs):
+            def check():
+                if (
+                    self._response_checker
+                    and self.driver.current_url != "chrome://welcome/"
+                ):
+                    self._response_checker(html.fromstring(self.driver.page_source))
+
+            check()
+            response = func(self, *args, **kwargs)
+            sleep(4)
+            check()
+            return response
+
+        return wrapper
+
+    @response_checker_decorator
+    def get(self, url):
+        self.driver.get(url)
 
     @property
     def content(self):
