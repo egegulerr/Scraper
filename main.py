@@ -3,7 +3,7 @@ import importlib
 
 if __name__ == "__main__":
     arg = sys.argv[1]
-    scriptModule = importlib.import_module("Integrations." + arg)
+    scriptModule = importlib.import_module("Services." + arg)
 
     script_class = getattr(scriptModule, arg)
     scriptInstance = script_class(True)

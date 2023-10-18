@@ -6,66 +6,9 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import Select
 from urllib.parse import urljoin, urlencode
 from Repository.ImmoScoutRepository import ImmoScoutDB
+from Entity.UserImmoScout import User
 
 logging.basicConfig(level=logging.INFO)
-
-
-class User:
-    name = os.environ["NAME"]
-    surname = os.environ["SURNAME"]
-    age = os.environ["AGE"]
-    subject = os.environ["SUBJECT"]
-    home_country = os.environ["COUNTRY"]
-    experience = os.environ["EXPERIENCE"]
-    university = os.environ["UNIVERSITY"]
-    job = os.environ["JOB"]
-    phone = os.environ["PHONE"]
-
-    @staticmethod
-    def get_all_user_details():
-        # TODO Maybe fetch datas from database ?
-        return {
-            "house": User.get_form_details(),
-            "search": User.get_search_details(),
-        }
-
-    @staticmethod
-    def get_search_details():
-        return {
-            "shape": "b2l4ZEhfcGRlQXZtRGN5QWZkQF9oQXpsQGdxRXNHX21FX3RDcX5HaXdCYXtAdWJDaUN9aEJkd0J5dEFweFVsbUpqX0E.",
-            "numberofrooms": "1.0-",
-            "price": "-1000.0",
-            "exclusioncriteria": "swapflat",
-            "pricetype": "calculatedtotalrent",
-            "enteredFrom": "result_list#",
-        }
-
-    @staticmethod
-    def get_form_details():
-        return {
-            "moveInDateType": "FLEXIBLE",
-            "numberOfPersons": "ONE_PERSON",
-            "hasPets": "false",
-            "employmentRelationship": "WORKER",
-            "income": "OVER_2000_UPTO_3000",
-            "applicationPackageCompleted": "true",
-        }
-
-    @staticmethod
-    def get_email_template(gender, name):
-        # TODO Maybe storing email with json or creating class for E-Mail could be a good idea
-        return f"""
-            Sehr geehrte {gender} {name},
-    ich bin {User.name} und {User.age} Jahre alt. Ursprünglich komme ich aus Istanbul, doch die letzten {User.experience} Jahre habe ich in 
-München gewohnt. Mein Studium der {User.subject} an der {User.university} habe ich vor Kurzem erfolgreich 
-abgeschlossen, und seit nunmehr zwei Wochen arbeite ich als Vollzeit-{User.job}. Ich interessiere mich für 
-Ihre Wohnung!
-    Wenn Sie noch weitere Fragen haben oder Interesse daran, mich besser kennenzulernen, stehe ich gerne 
-zur Verfügung.Ich würde mich auf eine Rückmeldung sehr freuen! Meine Handynummer ist: {User.phone}
-
-Herzliche Grüße,
-{User.name} 
-        """
 
 
 class ImmoScout24(BaseIntegration):
@@ -123,7 +66,7 @@ class ImmoScout24(BaseIntegration):
         sleep(3)
         self.scraper.find_and_click_element(By.XPATH, ".//input[@value='Bestätigen']")
 
-    def get_general_home_info(self, url):
+    def scrape_houses(self, url):
         def get_element_info(element, key):
             return element.find_element(
                 By.XPATH, f".//dl/dt[text()='{key}']/preceding-sibling::dd[1]"
@@ -145,13 +88,14 @@ class ImmoScout24(BaseIntegration):
                     f"{pager_xpath}/a[contains(@aria-label, 'Page {page_number}')]",
                 )
             articles = self.scraper.find_elements(
-                By.XPATH, ".//ul[@id='resultListItems']/li[@data-id]/article"
+                By.XPATH,
+                ".//ul[@id='resultListItems']/li[@data-id]/article[not(.//button[contains(@class, "
+                "'heart_24_filled')])]",
             )
 
             for article in articles:
-                isPremiumRequired = "paywall-listing" in article.get_attribute("class")
                 # TODO need to implement premium houses
-                if isPremiumRequired:
+                if "paywall-listing" in article.get_attribute("class"):
                     continue
 
                 attributes = article.find_element(
@@ -173,34 +117,6 @@ class ImmoScout24(BaseIntegration):
             sleep(2)
         return result
 
-    def get_house_details(self, house_info):
-        logging.info("Got the house information. Getting details")
-        self.scraper.get(house_info["link"])
-        # TODO Maybe dont need to scrape with driver. IS24 File could be used ?
-
-        description_elements = self.scraper.find_elements(
-            By.XPATH,
-            ".//div[@id='is24-content']/div[contains(@class, "
-            "'contact-box')]/following-sibling::div[1]//div["
-            "contains(@class, 'is24-text')]",
-        )
-        decription_texts = [element.text for element in description_elements]
-        title = self.scraper.find_element(By.ID, "expose-title").text
-        owner = self.scraper.find_element(
-            By.XPATH, ".//div[@data-qa='contactName']"
-        ).text
-        house_info.update(
-            {
-                "title": title,
-                "owner": owner,
-                "desccription": decription_texts,
-                "Rooms": self.scraper.find_element(
-                    By.XPATH, ".//div[contains(@class, 'zi-main')]"
-                ).text,
-            }
-        )
-        return house_info
-
     def send_message(self, house_title, house_owner, user_details):
         def select_option(select_name, option_value):
             Select(self.scraper.find_element(By.NAME, select_name)).select_by_value(
@@ -212,6 +128,7 @@ class ImmoScout24(BaseIntegration):
             gender, last_name = owner_parsed[0], owner_parsed[-1]
             message = User.get_email_template(gender, last_name)
             self.scraper.click_when_clickable(By.XPATH, ".//a[@data-qa='sendButton']")
+            sleep(2)
             self.scraper.find_and_send_key(By.ID, "contactForm-Message", message)
 
             if not self.scraper.find_element(By.NAME, "moveInDateType").is_displayed():
@@ -240,24 +157,71 @@ class ImmoScout24(BaseIntegration):
         )
         logging.info(f"Message successfully sent")
 
+    def get_detail(self, houses):
+        result = []
+        for house in houses:
+            logging.info("Got the house information. Getting details")
+            self.scraper.get(house["link"])
+            # TODO Maybe dont need to scrape with driver. IS24 File could be used ?
+
+            description_elements = self.scraper.find_elements(
+                By.XPATH,
+                ".//div[@id='is24-content']/div[contains(@class, "
+                "'contact-box')]/following-sibling::div[1]//div["
+                "contains(@class, 'is24-text')]",
+            )
+            description_texts = [element.text for element in description_elements]
+            title = self.scraper.find_element(By.ID, "expose-title").text
+            owner = self.scraper.find_element(
+                By.XPATH, ".//div[@data-qa='contactName']"
+            ).text
+            house_details = {
+                **house,
+                "title": title,
+                "owner": owner,
+                "description": description_texts,
+                "Rooms": self.scraper.find_element(
+                    By.XPATH, ".//div[contains(@class, 'zi-main')]"
+                ).text,
+            }
+            result.append(house_details)
+        return result
+
+    def contact_owner(self, houses):
+        contacted_houses = []
+        for house in houses:
+            user_form_details = User.get_form_details()
+            try:
+                self.send_message(house["title"], house["owner"], user_form_details)
+                contacted_houses.append(house)
+            except Exception as e:
+                logging.error(f"An error occured while sending the message: {e}")
+
+        return contacted_houses
+
     def scrape(self):
         try:
             self.login()
-            user_search_details = User.get_search_details()
-            url = self.get_search_url(user_search_details)
-            houses = self.get_general_home_info(url)
             # TODO Maybe dont need connect function here ?
             self.db.connect()
-            self.db.insert_founded_houses(houses)
-            for house in houses:
-                house_detailed = self.get_house_details(house)
-                user_details = User.get_form_details()
-                try:
-                    self.send_message(
-                        house_detailed["title"], house_detailed["owner"], user_details
-                    )
+            houses = self.db.get_founded_houses()
 
-                except Exception as e:
-                    logging.error(f"An error occured while sending the message: {e}")
-        except:
+            if houses:
+                logging.info("There are already scraped houses.")
+                houses_detailed = self.get_detail(houses)
+                contacted_houses = self.contact_owner(houses_detailed)
+            else:
+                user_search_details = User.get_search_details()
+                url = self.get_search_url(user_search_details)
+                houses = self.scrape_houses(url)
+                self.db.insert_founded_houses(houses)
+                houses_detailed = self.get_detail(houses)
+                contacted_houses = self.contact_owner(houses_detailed)
+
+            self.db.delete_founded_houses(contacted_houses)
+            self.db.insert_contacted_houses(contacted_houses)
+
+        except Exception as e:
+            logging.error(f"An error occured while scraping: {e}")
+        finally:
             self.db.close()
