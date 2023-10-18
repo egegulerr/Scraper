@@ -43,10 +43,7 @@ class ImmoScout24(BaseIntegration):
         logging.info("Doing login")
         # TODO Maybe need to wait, sometimes robots check comes before cookies
         self.scraper.get(self.url)
-        cookie_button = self.scraper.execute_script(
-            """return  document.querySelector('#usercentrics-root').shadowRoot.querySelector("button[data-testid='uc-accept-all-button']")"""
-        )
-        self.scraper.click_element(cookie_button)
+        self.scraper.handle_cookies()
         self.scraper.find_and_click_element(By.XPATH, self.login_xpath)
         self.scraper.find_and_send_key(
             By.XPATH, ".//input[@id='username']", self.username

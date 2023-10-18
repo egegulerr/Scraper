@@ -92,3 +92,9 @@ class SeleniumScraper(ScraperFactory):
 
     def execute_script(self, script):
         return self.driver.execute_script(script)
+
+    def handle_cookies(self):
+        cookie_button = self.driver.execute_script(
+            """return  document.querySelector('#usercentrics-root').shadowRoot.querySelector("button[data-testid='uc-accept-all-button']")"""
+        )
+        self.driver.click_element(cookie_button)
