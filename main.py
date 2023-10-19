@@ -1,11 +1,24 @@
-import sys
-import importlib
+from WebClient.SeleniumScraper import SeleniumScraper
+from WebClient.RequestsScraper import RequestsScraper
+from Integrations.immoScout24.service.ImmoScoutScraper import ImmoScoutScraper
+from Integrations.immoScout24.entity.UserImmoScout import User
+from Integrations.immoScout24.repository.ImmoScoutRepository import ImmoScoutDB
+from Integrations.immoScout24.ImmoScout24 import ImmoScout24
+
+
+def create_scraper_instance(use_selenium=False, web_driver_options=None):
+    return SeleniumScraper(web_driver_options) if use_selenium else RequestsScraper()
+
 
 if __name__ == "__main__":
-    arg = sys.argv[1]
-    scriptModule = importlib.import_module("Services." + arg)
+    driver = create_scraper_instance(use_selenium=True)
+    rest = create_scraper_instance(use_selenium=False)
 
-    script_class = getattr(scriptModule, arg)
-    scriptInstance = script_class(True)
-    scriptInstance.setup()
-    scriptInstance.main()
+    user_entity = User.from_env()
+    repository = ImmoScoutDB()
+    scraping_service = ImmoScoutScraper(webdriver=driver, rest=rest)
+
+    main_script = ImmoScout24(scraping_service, user_entity, repository)
+    main_script.main()
+
+    print("Done")

@@ -16,10 +16,6 @@ class ImmoScoutDB:
         self.contacted_collection: Collection = None
         self.db = None
 
-    @staticmethod
-    def convert_to_object_id(id):
-        return ObjectId(id)
-
     def connect(self):
         try:
             self.client = MongoClient(self.uri, tls=True)
@@ -52,8 +48,9 @@ class ImmoScoutDB:
         self.contacted_collection.insert_many(houses)
 
     def insert_contacted_house(self, house):
-        # TODO Better loging
-        logging.info(f"Inserting a house to contacted collection")
+        logging.info(
+            f"Inserting a house with address {house['Address']} to contacted collection"
+        )
         self.contacted_collection.insert_one(house)
 
     def get_founded_houses(self):
