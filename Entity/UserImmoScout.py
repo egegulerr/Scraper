@@ -53,7 +53,7 @@ class User:
 München gewohnt. Mein Studium der {User.subject} an der {User.university} habe ich vor Kurzem erfolgreich 
 abgeschlossen, und seit nunmehr zwei Wochen arbeite ich als Vollzeit-{User.job}. Ich interessiere mich für 
 Ihre Wohnung!
-    Wenn Sie noch weitere Fragen haben oder Interesse daran, mich besser kennenzulernen, stehe ich gerne 
+Wenn Sie noch weitere Fragen haben oder Interesse daran, mich besser kennenzulernen, stehe ich gerne 
 zur Verfügung.Ich würde mich auf eine Rückmeldung sehr freuen! Meine Handynummer ist: {User.phone}
 
 Herzliche Grüße,

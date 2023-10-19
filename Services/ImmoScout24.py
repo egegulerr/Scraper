@@ -10,16 +10,18 @@ from Entity.UserImmoScout import User
 
 logging.basicConfig(level=logging.INFO)
 
+LOGIN_XPATH = ".//*[text()='Anmelden'][self::a or self::span]"
+CAPTCHA_XPATH = (
+    ".//div[@class='main__captcha']//p[contains(text(), 'Nachdem du das unten stehende CAPTCHA "
+    "bestätigt hast')] | .//span[contains(text(), 'Captcha')]"
+)
+NOT_ACTIVE_XPATH = ".//h3[text()='Angebot wurde deaktiviert']"
+
 
 class ImmoScout24(BaseIntegration):
     def __init__(self, use_selenium=False, webdriver_options=None):
         super().__init__(use_selenium, webdriver_options)
         self.url = "https://www.immobilienscout24.de/"
-        self.login_xpath = ".//*[text()='Anmelden'][self::a or self::span]"
-        self.captcha_xpath = (
-            ".//div[@class='main__captcha']//p[contains(text(), 'Nachdem du das unten stehende CAPTCHA "
-            "bestätigt hast')] | .//span[contains(text(), 'Captcha')]"
-        )
         self.username = os.environ["USERNAME"]
         self.password = os.environ["PASSWORD"]
         self.db = ImmoScoutDB()
@@ -28,7 +30,7 @@ class ImmoScout24(BaseIntegration):
         self.scraper.add_response_checker(self.response_checker)
 
     def response_checker(self, response_body):
-        if response_body.xpath(self.captcha_xpath):
+        if response_body.xpath(CAPTCHA_XPATH):
             logging.info("Captcha showed up. Solving it")
             self.scraper.solve_recaptcha()
 
@@ -44,7 +46,7 @@ class ImmoScout24(BaseIntegration):
         # TODO Maybe need to wait, sometimes robots check comes before cookies
         self.scraper.get(self.url)
         self.scraper.handle_cookies()
-        self.scraper.find_and_click_element(By.XPATH, self.login_xpath)
+        self.scraper.find_and_click_element(By.XPATH, LOGIN_XPATH)
         self.scraper.find_and_send_key(
             By.XPATH, ".//input[@id='username']", self.username
         )
@@ -114,7 +116,7 @@ class ImmoScout24(BaseIntegration):
             sleep(2)
         return result
 
-    def send_message(self, house_title, house_owner, user_details):
+    def send_message(self, house_owner, user_details):
         def select_option(select_name, option_value):
             Select(self.scraper.find_element(By.NAME, select_name)).select_by_value(
                 option_value
@@ -143,10 +145,6 @@ class ImmoScout24(BaseIntegration):
                 user_details["applicationPackageCompleted"],
             )
 
-        logging.info(
-            f"Extracted details of {house_title}. Sending message now to owner {house_owner}"
-        )
-
         sleep(3)
         fill_form()
         self.scraper.click_when_clickable(
@@ -154,71 +152,83 @@ class ImmoScout24(BaseIntegration):
         )
         logging.info(f"Message successfully sent")
 
-    def get_detail(self, houses):
-        result = []
-        for house in houses:
-            logging.info("Got the house information. Getting details")
-            self.scraper.get(house["link"])
-            # TODO Maybe dont need to scrape with driver. IS24 File could be used ?
+    def get_detail(self, house):
+        logging.info(f"Got the house with address {house['Address']}. Getting details")
+        self.scraper.get(house["link"])
+        # TODO Maybe dont need to scrape with driver. IS24 File could be used ?
+        # TODO Maybe need to surround this function with try / except ?
+        if self.scraper.find_elements(By.XPATH, NOT_ACTIVE_XPATH):
+            logging.info("Found deactivated house. Deleting it from DB")
+            self.db.delete_founded_house(house)
+            return
 
-            description_elements = self.scraper.find_elements(
-                By.XPATH,
-                ".//div[@id='is24-content']/div[contains(@class, "
-                "'contact-box')]/following-sibling::div[1]//div["
-                "contains(@class, 'is24-text')]",
+        description_elements = self.scraper.find_elements(
+            By.XPATH,
+            ".//div[@id='is24-content']/div[contains(@class, "
+            "'contact-box')]/following-sibling::div[1]//div["
+            "contains(@class, 'is24-text')]",
+        )
+        description_texts = " ".join(element.text for element in description_elements)
+        title = self.scraper.find_element(By.ID, "expose-title").text
+        owner = self.scraper.find_element(
+            By.XPATH, ".//div[@data-qa='contactName']"
+        ).text
+        house_detailed = {
+            **house,
+            "title": title,
+            "owner": owner,
+            "description": description_texts,
+            "rooms": self.scraper.find_element(
+                By.XPATH, ".//div[contains(@class, 'zi-main')]"
+            ).text,
+        }
+        return house_detailed
+
+    def contact_owner(self, house):
+        user_form_details = User.get_form_details()
+        try:
+            logging.info(
+                f"Extracted details of house with address {house['Address']}. Sending message now to owner {house['owner']}"
             )
-            description_texts = [element.text for element in description_elements]
-            title = self.scraper.find_element(By.ID, "expose-title").text
-            owner = self.scraper.find_element(
-                By.XPATH, ".//div[@data-qa='contactName']"
-            ).text
-            house_details = {
-                **house,
-                "title": title,
-                "owner": owner,
-                "description": description_texts,
-                "Rooms": self.scraper.find_element(
-                    By.XPATH, ".//div[contains(@class, 'zi-main')]"
-                ).text,
-            }
-            result.append(house_details)
-        return result
+            self.send_message(house["owner"], user_form_details)
+        except Exception as e:
+            logging.error(
+                f"An error occured while sending message to {house['owner']} with address {house['Address']}: {e}"
+            )
 
-    def contact_owner(self, houses):
-        contacted_houses = []
-        for house in houses:
-            user_form_details = User.get_form_details()
-            try:
-                self.send_message(house["title"], house["owner"], user_form_details)
-                contacted_houses.append(house)
-            except Exception as e:
-                logging.error(f"An error occured while sending the message: {e}")
-
-        return contacted_houses
+    def get_houses(self):
+        found_houses = self.db.get_founded_houses()
+        if found_houses:
+            logging.info("There are already scraped houses.")
+            return found_houses
 
     def scrape(self):
-        try:
-            self.login()
-            # TODO Maybe dont need connect function here ?
-            self.db.connect()
-            houses = self.db.get_founded_houses()
+        self.login()
+        # TODO Maybe dont need connect function here ?
+        self.db.connect()
+        houses = self.get_houses()
 
-            if houses:
-                logging.info("There are already scraped houses.")
-                houses_detailed = self.get_detail(houses)
-                contacted_houses = self.contact_owner(houses_detailed)
-            else:
-                user_search_details = User.get_search_details()
-                url = self.get_search_url(user_search_details)
-                houses = self.scrape_houses(url)
-                self.db.insert_founded_houses(houses)
-                houses_detailed = self.get_detail(houses)
-                contacted_houses = self.contact_owner(houses_detailed)
+        if not houses:
+            user_search_details = User.get_search_details()
+            url = self.get_search_url(user_search_details)
+            houses = self.scrape_houses(url)
+            self.db.insert_founded_houses(houses)
 
-            self.db.delete_founded_houses(contacted_houses)
-            self.db.insert_contacted_houses(contacted_houses)
+        for house in houses:
+            houses_detailed = self.get_detail(house)
+            self.contact_owner(houses_detailed)
+            self.db.delete_founded_house(house)
+            self.db.insert_contacted_house(houses_detailed)
 
-        except Exception as e:
-            logging.error(f"An error occured while scraping: {e}")
-        finally:
-            self.db.close()
+    def main(self):
+        while True:
+            try:
+                self.scrape()
+            except Exception as e:
+                logging.error(f"ERROR: {e}")
+                answer = input("Error occured. Do you want to start again ? Y/N")
+                if answer.lower() == "n":
+                    logging.info("************TERMINATING************")
+                    break
+            finally:
+                self.db.close()

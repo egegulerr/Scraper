@@ -8,4 +8,4 @@ if __name__ == "__main__":
     script_class = getattr(scriptModule, arg)
     scriptInstance = script_class(True)
     scriptInstance.setup()
-    scriptInstance.scrape()
+    scriptInstance.main()

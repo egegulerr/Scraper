@@ -1,3 +1,4 @@
+import logging
 import os
 from pymongo import MongoClient
 from pymongo.collection import Collection
@@ -31,21 +32,40 @@ class ImmoScoutDB:
             print(f"Failed to connect to MongoDB: {str(e)}")
 
     def close(self):
+        logging.info("Closing db connection")
         if self.client is not None:
             self.client.close()
 
     def insert_founded_house(self, house):
+        logging.info(
+            f"Inserting house with address {house['Address']} to founded collection"
+        )
         self.founded_collection.insert_one(house)
 
     def insert_founded_houses(self, houses):
+        logging.info(f"Inserting houses to founded collection")
+
         self.founded_collection.insert_many(houses)
 
     def insert_contacted_houses(self, houses):
+        logging.info(f"Inserting houses to contacted collection")
         self.contacted_collection.insert_many(houses)
+
+    def insert_contacted_house(self, house):
+        # TODO Better loging
+        logging.info(f"Inserting a house to contacted collection")
+        self.contacted_collection.insert_one(house)
 
     def get_founded_houses(self):
         return [house for house in self.founded_collection.find()]
 
     def delete_founded_houses(self, houses):
-        house_ids = [self.convert_to_object_id(house["_id"]) for house in houses]
-        self.founded_collection.delete_many({"_id": {"$in": house_ids}})
+        logging.info(f"Deleting contacted houses from founded collection")
+        house_links = [house["link"] for house in houses]
+        self.founded_collection.delete_many({"link": {"$in": house_links}})
+
+    def delete_founded_house(self, house):
+        logging.info(
+            f"Deleting house with address {house['Address']} from founded collection"
+        )
+        self.founded_collection.delete_one({"link": house["link"]})
