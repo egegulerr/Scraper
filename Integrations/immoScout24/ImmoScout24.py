@@ -1,6 +1,6 @@
 import logging
 from Integrations.immoScout24.repository import ImmoScoutRepository
-from Integrations.immoScout24.service import ImmoScoutScraper
+from Integrations.immoScout24.service import ScrapingService
 
 logging.basicConfig(level=logging.INFO)
 
@@ -8,7 +8,7 @@ logging.basicConfig(level=logging.INFO)
 class ImmoScout24:
     def __init__(self, scraping_service, user, repository):
         # TODO Create interfaces to make dependency injection better
-        self.scraper: ImmoScoutScraper = scraping_service
+        self.scraper: ScrapingService = scraping_service
         self.db: ImmoScoutRepository = repository
         self.user = user
 

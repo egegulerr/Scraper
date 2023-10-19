@@ -17,7 +17,7 @@ NOT_ACTIVE_XPATH = ".//h3[text()='Angebot wurde deaktiviert']"
 logging.basicConfig(level=logging.INFO)
 
 
-class ImmoScoutScraper(BaseIntegration, ABC):
+class ScrapingService(BaseIntegration, ABC):
     LOGIN_XPATH = ".//*[text()='Anmelden'][self::a or self::span]"
     CAPTCHA_XPATH = (
         ".//div[@class='main__captcha']//p[contains(text(), 'Nachdem du das unten stehende CAPTCHA "
