@@ -2,10 +2,18 @@ import logging
 import os
 from abc import ABC
 from time import sleep
+from typing import Type
 from urllib.parse import urljoin, urlencode
-from selenium.webdriver.support.ui import Select
 from BaseIntegration import BaseIntegration
 from selenium.webdriver.common.by import By
+
+from Integrations.immoScout24.service.FormFillingService import (
+    FormFiller,
+    SmokerForm,
+    FormFillingStrategy,
+    InterviewForm,
+    EasyForm,
+)
 
 LOGIN_XPATH = ".//*[text()='Anmelden'][self::a or self::span]"
 CAPTCHA_XPATH = (
@@ -13,33 +21,34 @@ CAPTCHA_XPATH = (
     "bestätigt hast')] | .//span[contains(text(), 'Captcha')]"
 )
 NOT_ACTIVE_XPATH = ".//h3[text()='Angebot wurde deaktiviert']"
+IS_NOT_LOGGED_IN = ".//span[contains(@class, 'sso-login__user-name') and not(text())]"
 
 logging.basicConfig(level=logging.INFO)
 
 
 class ScrapingService(BaseIntegration, ABC):
-    LOGIN_XPATH = ".//*[text()='Anmelden'][self::a or self::span]"
-    CAPTCHA_XPATH = (
-        ".//div[@class='main__captcha']//p[contains(text(), 'Nachdem du das unten stehende CAPTCHA "
-        "bestätigt hast')] | .//span[contains(text(), 'Captcha')]"
-    )
-    NOT_ACTIVE_XPATH = ".//h3[text()='Angebot wurde deaktiviert']"
-
     def __init__(self, webdriver, rest):
         self.url = "https://www.immobilienscout24.de/"
         self.username = os.environ["USERNAME"]
         self.password = os.environ["PASSWORD"]
         self.webdriver = webdriver
         self.rest = rest
+        self.form_filler = None
         self.setup()
 
     def setup(self):
         self.webdriver.add_response_checker(self.response_checker)
 
+    def set_form_filler(self, strategy: Type[FormFillingStrategy]):
+        self.form_filler = FormFiller(strategy(self.webdriver))
+
     def response_checker(self, response_body):
         if response_body.xpath(CAPTCHA_XPATH):
             logging.info("Captcha showed up. Solving it")
             self.webdriver.solve_recaptcha()
+        if response_body.xpath(IS_NOT_LOGGED_IN):
+            logging.info("Not logged in. Doing login")
+            self.login()
 
     @staticmethod
     def get_search_url(search_details):
@@ -123,36 +132,28 @@ class ScrapingService(BaseIntegration, ABC):
             sleep(2)
         return result
 
+    def detect_form_type(self):
+        if self.webdriver.find_element(
+            By.NAME, "applicationPackageCompleted"
+        ).is_displayed():
+            return InterviewForm
+        if self.webdriver.find_element(By.NAME, "smoker").is_displayed():
+            return SmokerForm
+        if self.webdriver.find_element(By.NAME, "income").is_displayed():
+            return EasyForm
+
+        raise NotImplementedError("Not implemented form found")
+
     def send_message(self, form_details, message):
-        def select_option(select_name, option_value):
-            Select(self.webdriver.find_element(By.NAME, select_name)).select_by_value(
-                option_value
-            )
-
-        def fill_form():
-            self.webdriver.click_when_clickable(By.XPATH, ".//a[@data-qa='sendButton']")
-            sleep(2)
-            self.webdriver.find_and_send_key(By.ID, "contactForm-Message", message)
-
-            if not self.webdriver.find_element(
-                By.NAME, "moveInDateType"
-            ).is_displayed():
-                return
-
-            select_option("moveInDateType", form_details["moveInDateType"])
-            select_option("numberOfPersons", form_details["numberOfPersons"])
-            select_option("hasPets", form_details["hasPets"])
-            select_option(
-                "employmentRelationship", form_details["employmentRelationship"]
-            )
-            select_option("income", form_details["income"])
-            select_option(
-                "applicationPackageCompleted",
-                form_details["applicationPackageCompleted"],
-            )
-
         sleep(3)
-        fill_form()
+        self.webdriver.click_when_clickable(By.XPATH, ".//a[@data-qa='sendButton']")
+        sleep(2)
+        self.webdriver.find_and_send_key(By.ID, "contactForm-Message", message)
+        if self.webdriver.find_element(By.NAME, "moveInDateType").is_displayed():
+            form_type = self.detect_form_type()
+            self.set_form_filler(form_type)
+            self.form_filler.fill_form(form_details)
+
         self.webdriver.click_when_clickable(
             By.XPATH, ".//button[@data-qa='sendButtonBasic']", time_out=60
         )
@@ -188,12 +189,7 @@ class ScrapingService(BaseIntegration, ABC):
         return house_detailed
 
     def contact_owner(self, owner, address, user_form_details, message):
-        try:
-            logging.info(
-                f"Extracted details of house with address {address}. Sending message now to owner {owner}"
-            )
-            self.send_message(user_form_details, message)
-        except Exception as e:
-            logging.error(
-                f"An error occured while sending message to {owner} with address {address}: {e}"
-            )
+        logging.info(
+            f"Extracted details of house with address {address}. Sending message now to owner {owner}"
+        )
+        self.send_message(user_form_details, message)

@@ -130,6 +130,11 @@ class User:
             "employmentRelationship": "WORKER",
             "income": "OVER_2000_UPTO_3000",
             "applicationPackageCompleted": "true",
+            "employmentStatus": "INDEFINITE_PERIOD",
+            "rentArrears": "false",
+            "insolvencyProcess": "false",
+            "smoker": "false",
+            "forCommercialPurposes": "false",
         }
 
     @staticmethod

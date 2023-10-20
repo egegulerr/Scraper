@@ -18,7 +18,7 @@ class SeleniumScraper(ScraperFactory):
         self.driver = uc.Chrome(
             headless=False, use_subprocess=False, options=options, version_main=117
         )
-        self.driver.maximize_window()
+        # self.driver.maximize_window()
         self._response_checker = None
 
     def close(self):
@@ -69,6 +69,7 @@ class SeleniumScraper(ScraperFactory):
 
     def find_and_send_key(self, method, selector, key):
         element = self.driver.find_element(method, selector)
+        element.clear()
         element.send_keys(key)
         sleep(3)
 

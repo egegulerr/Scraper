@@ -19,7 +19,6 @@ class ImmoScout24:
         return f"{gender} {last_name}"
 
     def scrape(self):
-        self.scraper.login()
         self.db.connect()
         houses = self.db.get_founded_houses()
 
