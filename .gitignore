@@ -1,0 +1,24 @@
+# Ignore Python bytecode files
+__pycache__/
+
+# Ignore virtual environment directories (e.g., created by virtualenv or venv)
+venv/
+
+# Ignore editor/IDE specific files
+.vscode/
+.idea/
+
+# Ignore system-generated files and directories
+.DS_Store
+Thumbs.db
+
+# Ignore log files
+*.log
+
+# Ignore configuration files with sensitive information (e.g., secrets.json)
+secrets.json
+
+# Ignore compiled Python files
+*.pyc
+*.pyo
+__pycache__/
