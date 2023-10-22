@@ -11,5 +11,5 @@ class ScraperFactory(ABC):
         pass
 
     @abstractmethod
-    def add_response_checker(self):
+    def add_response_checker(self, func):
         pass

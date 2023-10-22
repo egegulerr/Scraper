@@ -24,8 +24,8 @@ class SeleniumScraper(ScraperFactory):
     def close(self):
         self.driver.close()
 
-    def add_response_checker(self, function):
-        self._response_checker = function
+    def add_response_checker(self, func):
+        self._response_checker = func
 
     @staticmethod
     def response_checker_decorator(func):

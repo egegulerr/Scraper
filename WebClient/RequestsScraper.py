@@ -11,5 +11,5 @@ class RequestsScraper(ScraperFactory):
     def close(self):
         pass
 
-    def add_response_checker(self):
+    def add_response_checker(self, func):
         pass
