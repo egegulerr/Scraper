@@ -1,25 +1,26 @@
-from selenium import webdriver
+import logging
 from time import sleep
-from lxml import html
 import undetected_chromedriver as uc
+from lxml import html
+from undetected_chromedriver import Chrome
 from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from .ScraperFactory import ScraperFactory
+from ScraperFactory import ScraperFactory
 
 
 class SeleniumScraper(ScraperFactory):
-    def __init__(self, web_driver_options=None):
+    def __init__(self):
+        self.driver: Chrome = None
+        self._response_checker = None
+        # self.driver.maximize_window()
+
+    def init_driver(self):
         options = uc.ChromeOptions()
         options.add_argument("--ignore-ssl-errors=yes")
         options.add_argument("--ignore-certificate-errors")
-        if web_driver_options:
-            for arg in web_driver_options:
-                options.add_argument(arg)
         self.driver = uc.Chrome(
             headless=False, use_subprocess=False, options=options, version_main=117
         )
-        # self.driver.maximize_window()
-        self._response_checker = None
 
     def close(self):
         self.driver.close()
@@ -54,14 +55,14 @@ class SeleniumScraper(ScraperFactory):
         return self.driver.page_source
 
     @staticmethod
-    def solve_recaptcha():
+    def solve_bot_detection():
         input("Please press enter after you solve recaptcha.")
         sleep(4)
 
     def click_element(self, element):
         element.click()
         sleep(3)
-        self._response_checker(html.fromstring(self.driver.page_source))
+        self._response_checker(self.driver)
 
     def find_and_click_element(self, method, selector):
         element = self.driver.find_element(method, selector)
@@ -89,7 +90,7 @@ class SeleniumScraper(ScraperFactory):
             )
         ).click()
         sleep(3)
-        self._response_checker(html.fromstring(self.driver.page_source))
+        self._response_checker(self.driver)
 
     def execute_script(self, script):
         return self.driver.execute_script(script)
@@ -99,3 +100,10 @@ class SeleniumScraper(ScraperFactory):
             """return  document.querySelector('#usercentrics-root').shadowRoot.querySelector("button[data-testid='uc-accept-all-button']")"""
         )
         self.click_element(cookie_button)
+
+    @staticmethod
+    def take_screenshot(element):
+        path = "../ML/image.png"
+        element.screenshot(path)
+        logging.info(f"Saved image as image.png")
+        return path

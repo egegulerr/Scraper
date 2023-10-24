@@ -63,13 +63,5 @@ class ImmoScout24:
 
     def main(self):
         while True:
-            try:
-                self.scrape()
-            except Exception as e:
-                logging.error(f"ERROR: {e}")
-                answer = input("Error occured. Do you want to start again ? Y/N")
-                if answer.lower() == "n":
-                    logging.info("************TERMINATING************")
-                    break
-            finally:
-                self.db.close()
+            self.scraper.login()
+            self.scrape()

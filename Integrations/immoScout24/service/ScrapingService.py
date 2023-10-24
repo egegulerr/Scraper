@@ -4,9 +4,10 @@ from abc import ABC
 from time import sleep
 from typing import Type
 from urllib.parse import urljoin, urlencode
-from BaseIntegration import BaseIntegration
+from ScrapingUseCase import ScrapingUseCase
 from selenium.webdriver.common.by import By
-
+from ML.CaptchaReader import CaptchaReader
+from WebClient import SeleniumScraper, RequestsScraper
 from Integrations.immoScout24.service.FormFillingService import (
     FormFiller,
     SmokerForm,
@@ -16,39 +17,46 @@ from Integrations.immoScout24.service.FormFillingService import (
 )
 
 LOGIN_XPATH = ".//*[text()='Anmelden'][self::a or self::span]"
-CAPTCHA_XPATH = (
+BOT_DETECTION_XPATH = (
     ".//div[@class='main__captcha']//p[contains(text(), 'Nachdem du das unten stehende CAPTCHA "
     "bestätigt hast')] | .//span[contains(text(), 'Captcha')]"
 )
+CAPTCHA_XPATH = ".//img[contains(@src, 'captcha')]"
 NOT_ACTIVE_XPATH = ".//h3[text()='Angebot wurde deaktiviert']"
-IS_NOT_LOGGED_IN = ".//span[contains(@class, 'sso-login__user-name') and not(text())]"
+
 
 logging.basicConfig(level=logging.INFO)
 
 
-class ScrapingService(BaseIntegration, ABC):
-    def __init__(self, webdriver, rest):
+class ScrapingService(ScrapingUseCase, ABC):
+    def __init__(self, webdriver, rest, captcha_reader):
         self.url = "https://www.immobilienscout24.de/"
         self.username = os.environ["USERNAME"]
         self.password = os.environ["PASSWORD"]
-        self.webdriver = webdriver
-        self.rest = rest
-        self.form_filler = None
+        self.form_filler: FormFiller = None
+        self.webdriver: SeleniumScraper = webdriver
+        self.rest: RequestsScraper = rest
+        self.captcha_reader: CaptchaReader = captcha_reader
         self.setup()
 
     def setup(self):
         self.webdriver.add_response_checker(self.response_checker)
+        self.webdriver.init_driver()
+
+    def close(self):
+        self.webdriver.close()
+        self.rest.close()
 
     def set_form_filler(self, strategy: Type[FormFillingStrategy]):
         self.form_filler = FormFiller(strategy(self.webdriver))
 
     def response_checker(self, response_body):
-        if response_body.xpath(CAPTCHA_XPATH):
+        if response_body.xpath(BOT_DETECTION_XPATH):
             logging.info("Captcha showed up. Solving it")
             self.webdriver.solve_recaptcha()
-        if response_body.xpath(IS_NOT_LOGGED_IN):
-            logging.info("Not logged in. Doing login")
-            self.login()
+        if response_body.xpath(CAPTCHA_XPATH):
+            logging.info("Captcha showed up. Solving it")
+            self.solve_captcha()
 
     @staticmethod
     def get_search_url(search_details):
@@ -56,6 +64,13 @@ class ScrapingService(BaseIntegration, ABC):
             "https://www.immobilienscout24.de/Suche/de/bayern/muenchen/wohnung-mieten",
             "?" + urlencode(search_details),
         )
+
+    def solve_captcha(self):
+        img = self.webdriver.find_element(By.XPATH, CAPTCHA_XPATH)
+        path = self.webdriver.take_screenshot(img)
+        text = self.captcha_reader.detect_text(path)
+        self.webdriver.find_and_send_key(By.XPATH, "xpath", text)
+        self.webdriver.find_and_click_element(By.XPATH, "xpath")
 
     def do_2fa(self, input_field):
         code = input("Give the 2FA code from the from email")
@@ -157,6 +172,7 @@ class ScrapingService(BaseIntegration, ABC):
         self.webdriver.click_when_clickable(
             By.XPATH, ".//button[@data-qa='sendButtonBasic']", time_out=60
         )
+
         logging.info(f"Message successfully sent")
 
     def get_detail(self, house):
