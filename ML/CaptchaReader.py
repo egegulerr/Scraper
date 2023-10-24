@@ -22,6 +22,6 @@ class CaptchaReader:
                 )
             )
 
-        for text in texts:
-            print(f'\n" Captcha text: {text.description}"')
-            return text.description
+        text = texts[0].description
+        logging.info(f'\n" Captcha text: {text}"')
+        return text
